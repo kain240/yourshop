@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block title %}Inventory — YourShop{% endblock %}
+{% block topbar_title %}📦 Inventory{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('inventory.categories') }}" class="btn btn-outline btn-sm">Categories</a>
+<a href="{{ url_for('inventory.add_product') }}" class="btn btn-primary btn-sm">＋ Add Product</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <!-- Filters -->
+    <form method="GET" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px;">
+        <div class="search-bar" style="flex:1; min-width:200px;">
+            <span class="search-icon">🔍</span>
+            <input type="text" name="q" class="form-control" placeholder="Search by name or barcode..."
+                value="{{ q }}" />
+        </div>
+        <select name="category" class="form-control" style="width:160px;">
+            <option value="">All Categories</option>
+            {% for cat in categories %}
+            <option value="{{ cat.id }}" {{ 'selected' if category_id==cat.id }}>{{ cat.name }}</option>
+            {% endfor %}
+        </select>
+        <select name="stock" class="form-control" style="width:140px;">
+            <option value="">All Stock</option>
+            <option value="low" {{ 'selected' if stock_filter=='low' }}>Low Stock</option>
+            <option value="out" {{ 'selected' if stock_filter=='out' }}>Out of Stock</option>
+        </select>
+        <select name="expiry" class="form-control" style="width:150px;">
+            <option value="">All Expiry</option>
+            <option value="expiring" {{ 'selected' if expiry_filter=='expiring' }}>Expiring Soon</option>
+            <option value="expired" {{ 'selected' if expiry_filter=='expired' }}>Expired</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a href="{{ url_for('inventory.index') }}" class="btn btn-outline">Reset</a>
+    </form>
+
+    {% if products %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Barcode</th>
+                    <th>Category</th>
+                    <th>Qty</th>
+                    <th>Cost</th>
+                    <th>Price</th>
+                    <th>Expiry</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in products %}
+                <tr>
+                    <td>
+                        <div class="font-semibold">{{ p.name }}</div>
+                        <div class="text-xs text-muted">{{ p.unit }}</div>
+                    </td>
+                    <td class="text-sm text-muted">{{ p.barcode or '—' }}</td>
+                    <td class="text-sm">{{ p.category.name if p.category else '—' }}</td>
+                    <td>
+                        <span
+                            class="badge {{ 'badge-danger' if p.total_quantity == 0 else 'badge-warning' if p.is_low_stock else 'badge-success' }}">
+                            {{ p.total_quantity }}
+                        </span>
+                    </td>
+                    <td class="text-sm">₹{{ p.cost_price }}</td>
+                    <td class="font-semibold text-primary">₹{{ p.selling_price }}</td>
+                    <td class="text-sm">
+                        {% if p.earliest_expiry %}
+                        {% set days = (p.earliest_expiry - today).days %}
+                        <span
+                            class="badge {{ 'badge-danger' if days < 0 else 'badge-warning' if days <= 30 else 'badge-secondary' }}">
+                            {{ p.earliest_expiry.strftime('%d %b %Y') }}
+                        </span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if p.is_low_stock %}<span class="badge badge-warning">Low Stock</span>{% endif %}
+                        {% if p.total_quantity == 0 %}<span class="badge badge-danger">Out</span>{% endif %}
+                    </td>
+                    <td>
+                        <div class="td-actions">
+                            <a href="{{ url_for('inventory.batches', product_id=p.id) }}" class="btn btn-sm btn-outline"
+                                title="Batches">📋</a>
+                            {% if p.barcode %}
+                            <a href="{{ url_for('inventory.barcode_view', product_id=p.id) }}"
+                                class="btn btn-sm btn-outline" title="Download Barcode">🔖</a>
+                            {% endif %}
+                            <a href="{{ url_for('inventory.edit_product', product_id=p.id) }}"
+                                class="btn btn-sm btn-primary">Edit</a>
+                            <form method="POST" action="{{ url_for('inventory.delete_product', product_id=p.id) }}"
+                                style="display:inline;" onsubmit="return confirm('Deactivate this product?')">
+                                <button class="btn btn-sm btn-danger">Del</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">📦</div>
+        <h3>No products found</h3>
+        <p class="text-muted">Add your first product to get started.</p>
+        <a href="{{ url_for('inventory.add_product') }}" class="btn btn-primary mt-4">＋ Add Product</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Quick barcode scan on this page — focus search when barcode scan happens
+    document.addEventListener('keydown', function (e) {
+        if (document.activeElement.tagName !== 'INPUT') {
+            const searchInput = document.querySelector('input[name="q"]');
+            if (searchInput && e.key.length === 1) {
+                searchInput.focus();
+            }
+        }
+    });
+</script>
+{% endblock %}

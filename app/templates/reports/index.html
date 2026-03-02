@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+{% block title %}Reports & P&L — YourShop{% endblock %}
+{% block topbar_title %}📈 Profit & Loss{% endblock %}
+
+{% block content %}
+<!-- Date Filter -->
+<div class="card" style="margin-bottom:20px;">
+    <form method="GET" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <div class="form-group" style="margin:0;">
+            <label class="form-label">From Date</label>
+            <input type="date" name="date_from" class="form-control" value="{{ date_from }}" />
+        </div>
+        <div class="form-group" style="margin:0;">
+            <label class="form-label">To Date</label>
+            <input type="date" name="date_to" class="form-control" value="{{ date_to }}" />
+        </div>
+        <button type="submit" class="btn btn-primary">Apply</button>
+        <a href="{{ url_for('reports.index') }}" class="btn btn-outline">This Month</a>
+    </form>
+</div>
+
+<!-- P&L Stats -->
+<div class="stat-grid" style="margin-bottom:24px;">
+    <div class="stat-card primary">
+        <div class="stat-icon">💰</div>
+        <div class="stat-value">₹{{ "{:,.0f}".format(revenue) }}</div>
+        <div class="stat-label">Revenue</div>
+    </div>
+    <div class="stat-card warning">
+        <div class="stat-icon">🏷</div>
+        <div class="stat-value">₹{{ "{:,.0f}".format(cogs) }}</div>
+        <div class="stat-label">Cost of Goods (COGS)</div>
+    </div>
+    <div class="stat-card {{ 'success' if gross_profit >= 0 else 'danger' }}">
+        <div class="stat-icon">📊</div>
+        <div class="stat-value">₹{{ "{:,.0f}".format(gross_profit) }}</div>
+        <div class="stat-label">Gross Profit ({{ "{:.1f}".format(gross_margin) }}%)</div>
+    </div>
+    <div class="stat-card {{ 'success' if net_profit >= 0 else 'danger' }}">
+        <div class="stat-icon">🏆</div>
+        <div class="stat-value">₹{{ "{:,.0f}".format(net_profit) }}</div>
+        <div class="stat-label">Net Profit</div>
+    </div>
+    <div class="stat-card danger">
+        <div class="stat-icon">💸</div>
+        <div class="stat-value">₹{{ "{:,.0f}".format(total_expenses) }}</div>
+        <div class="stat-label">Total Expenses</div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="grid-2" style="margin-bottom:24px;">
+    <div class="card">
+        <div class="card-header"><span class="card-title">📅 Daily Revenue vs Profit</span></div>
+        <div class="chart-container" style="height:240px;"><canvas id="dailyChart"></canvas></div>
+    </div>
+    <div class="card">
+        <div class="card-header"><span class="card-title">🏆 Top 10 Products by Sales</span></div>
+        <div class="chart-container" style="height:240px;"><canvas id="topProductsChart"></canvas></div>
+    </div>
+</div>
+
+<!-- Tables -->
+<div class="grid-2">
+    <!-- Expenses -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">💸 Expenses</span>
+            <button class="btn btn-primary btn-sm"
+                onclick="document.getElementById('addExpenseModal').classList.add('active')">＋ Add</button>
+        </div>
+        {% if expenses %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>Note</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>{% for e in expenses %}
+                    <tr>
+                        <td class="text-sm">{{ e.expense_date.strftime('%d %b') }}</td>
+                        <td><span class="badge badge-secondary">{{ e.category }}</span></td>
+                        <td class="font-semibold">₹{{ "{:,.2f}".format(e.amount) }}</td>
+                        <td class="text-sm text-muted">{{ e.description or '—' }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('reports.delete_expense', expense_id=e.id) }}"
+                                onsubmit="return confirm('Delete?')"><button class="btn btn-sm btn-danger">✕</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:30px;">
+            <div class="empty-icon">💸</div>
+            <p>No expenses recorded</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Top Products -->
+    <div class="card">
+        <div class="card-header"><span class="card-title">📦 Top Products</span></div>
+        {% if top_products %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Qty Sold</th>
+                        <th>Revenue</th>
+                    </tr>
+                </thead>
+                <tbody>{% for p in top_products %}
+                    <tr>
+                        <td class="font-semibold">{{ p.name }}</td>
+                        <td>{{ p.total_qty }}</td>
+                        <td class="text-primary">₹{{ "{:,.2f}".format(p.total_revenue) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:30px;">
+            <div class="empty-icon">📦</div>
+            <p>No sales data</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal-overlay" id="addExpenseModal">
+    <div class="modal">
+        <div class="modal-header"><span class="modal-title">＋ Add Expense</span><button class="modal-close"
+                onclick="document.getElementById('addExpenseModal').classList.remove('active')">✕</button></div>
+        <form method="POST" action="{{ url_for('reports.add_expense') }}">
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Category</label>
+                        <select name="category" class="form-control">
+                            <option>rent</option>
+                            <option>electricity</option>
+                            <option>salary</option>
+                            <option>transport</option>
+                            <option>misc</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label class="form-label">Amount (₹)</label>
+                        <input type="number" name="amount" class="form-control" step="0.01" required />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Date</label>
+                        <input type="date" name="expense_date" class="form-control" value="{{ date_to }}" />
+                    </div>
+                    <div class="form-group"><label class="form-label">Description</label>
+                        <input type="text" name="description" class="form-control" placeholder="Optional" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary">Add Expense</button><button type="button"
+                    class="btn btn-secondary"
+                    onclick="document.getElementById('addExpenseModal').classList.remove('active')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const dailyData = {{ daily_data | tojson }};
+    const topProducts = {{ top_products | map(attribute = 'name') | list | tojson }};
+    const topRevenue = {{ top_products | map(attribute = 'total_revenue') | list | tojson }};
+
+    new Chart(document.getElementById('dailyChart'), {
+        type: 'line',
+        data: {
+            labels: dailyData.map(d => d.date),
+            datasets: [
+                { label: 'Revenue', data: dailyData.map(d => d.revenue), borderColor: '#4F46E5', backgroundColor: 'rgba(79,70,229,0.1)', fill: true, tension: 0.4 },
+                { label: 'Profit', data: dailyData.map(d => d.profit), borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.4 }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94A3B8' } } },
+            scales: { x: { grid: { color: '#334155' }, ticks: { color: '#94A3B8' } }, y: { grid: { color: '#334155' }, ticks: { color: '#94A3B8', callback: v => '₹' + v.toLocaleString() } } }
+        }
+    });
+
+    new Chart(document.getElementById('topProductsChart'), {
+        type: 'bar',
+        data: {
+            labels: topProducts,
+            datasets: [{ label: 'Revenue', data: topRevenue, backgroundColor: 'rgba(6,182,212,0.7)', borderColor: '#06B6D4', borderWidth: 1, borderRadius: 6 }]
+        },
+        options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+            scales: { x: { grid: { color: '#334155' }, ticks: { color: '#94A3B8', callback: v => '₹' + v.toLocaleString() } }, y: { grid: { color: '#334155' }, ticks: { color: '#94A3B8' } } }
+        }
+    });
+</script>
+{% endblock %}

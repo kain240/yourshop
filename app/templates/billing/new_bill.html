@@ -1,0 +1,333 @@
+{% extends 'base.html' %}
+{% block title %}New Bill — YourShop{% endblock %}
+{% block topbar_title %}🧾 New Bill (POS){% endblock %}
+{% block topbar_actions %}
+<button class="btn btn-outline btn-sm" onclick="clearCart()">🗑 Clear</button>
+{% endblock %}
+
+{% block content %}
+<div class="pos-layout">
+    <!-- Left: Product Search -->
+    <div class="pos-left">
+        <div class="card" style="margin-bottom: 16px;">
+            <div class="search-bar">
+                <span class="search-icon">🔍</span>
+                <input id="productSearch" type="text" class="form-control"
+                    placeholder="Search product by name or scan barcode..." autocomplete="off" />
+            </div>
+            <div id="searchResults" class="mt-2" style="display:none;">
+                <div id="searchList"></div>
+            </div>
+        </div>
+
+        <!-- Customer & Bill Options -->
+        <div class="card">
+            <div class="card-header"><span class="card-title">📋 Bill Details</span></div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Customer (optional)</label>
+                    <input id="customerSearch" type="text" class="form-control" placeholder="Search customer..."
+                        autocomplete="off" />
+                    <div id="customerResults"
+                        style="display:none; position:absolute; z-index:100; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm); width:100%; max-height:200px; overflow-y:auto;">
+                    </div>
+                    <input type="hidden" id="selectedCustomerId" />
+                    <div id="selectedCustomerInfo" class="text-sm text-muted mt-1"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Discount (%)</label>
+                    <input id="discountInput" type="number" class="form-control" min="0" max="100" step="0.1" value="0"
+                        oninput="calculateTotals()" />
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Payment Method</label>
+                    <select id="paymentMethod" class="form-control">
+                        <option value="cash">💵 Cash</option>
+                        <option value="upi">📱 UPI</option>
+                        <option value="card">💳 Card</option>
+                        <option value="razorpay">🔷 Razorpay</option>
+                        <option value="credit">📝 Credit (Pay Later)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Amount Paid (₹)</label>
+                    <input id="amountPaidInput" type="number" class="form-control" min="0" step="0.01"
+                        placeholder="Leave blank for full amount" />
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Send Bill Via</label>
+                    <select id="deliveryMethod" class="form-control" onchange="toggleDelivery()">
+                        <option value="none">Don't send</option>
+                        <option value="email">📧 Email</option>
+                        <option value="whatsapp">💬 WhatsApp</option>
+                    </select>
+                </div>
+                <div class="form-group" id="deliveryAddressGroup" style="display:none;">
+                    <label class="form-label" id="deliveryAddressLabel">Email / Phone</label>
+                    <input id="deliveryAddress" type="text" class="form-control"
+                        placeholder="customer@email.com or 9876543210" />
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Notes</label>
+                <input id="billNotes" type="text" class="form-control" placeholder="Optional note on bill" />
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Cart -->
+    <div class="pos-right">
+        <div style="padding: 16px; border-bottom: 1px solid var(--border); font-weight: 600;">🛒 Cart</div>
+        <div class="cart-items" id="cartItems">
+            <div class="empty-state" style="padding: 40px 20px;" id="emptyCart">
+                <div class="empty-icon">🛒</div>
+                <p>Cart is empty</p>
+                <p class="text-sm text-muted">Search and add products above</p>
+            </div>
+        </div>
+        <div class="cart-total-section">
+            <div class="total-row"><span>Subtotal</span><span id="subtotalVal">₹0.00</span></div>
+            <div class="total-row"><span>Discount</span><span id="discountVal" class="text-success">-₹0.00</span></div>
+            <div class="total-row"><span>Tax</span><span id="taxVal">₹0.00</span></div>
+            <div class="total-row grand"><span>TOTAL</span><span id="totalVal" class="text-primary">₹0.00</span></div>
+            <div class="total-row" style="color: var(--text-dim)"><span>Amount Due</span><span id="dueVal">₹0.00</span>
+            </div>
+            <button id="submitBillBtn" onclick="submitBill()" class="btn btn-success w-full btn-lg mt-3"
+                style="justify-content:center;">
+                ✅ Create Bill
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Bill Success Modal -->
+<div class="modal-overlay" id="successModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">✅ Bill Created!</span>
+        </div>
+        <div class="modal-body" id="successBody" style="text-align:center;">
+        </div>
+        <div class="modal-footer">
+            <a id="viewBillLink" href="#" class="btn btn-primary">View Bill</a>
+            <a id="downloadPdfLink" href="#" class="btn btn-outline">📄 Download PDF</a>
+            <button onclick="closeModal()" class="btn btn-secondary">New Bill</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}{% endblock %}
+
+{% block scripts %}
+<script>
+    let cart = [];
+
+    // Product search
+    let searchTimeout;
+    document.getElementById('productSearch').addEventListener('input', function () {
+        clearTimeout(searchTimeout);
+        const q = this.value.trim();
+        if (q.length < 1) { document.getElementById('searchResults').style.display = 'none'; return; }
+        searchTimeout = setTimeout(() => searchProducts(q), 200);
+    });
+
+    document.getElementById('productSearch').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') searchProducts(this.value.trim(), true);
+    });
+
+    async function searchProducts(q, autoAdd = false) {
+        const res = await fetch(`/inventory/search-api?q=${encodeURIComponent(q)}`);
+        const products = await res.json();
+        const list = document.getElementById('searchList');
+        const container = document.getElementById('searchResults');
+
+        if (!products.length) { container.style.display = 'none'; return; }
+
+        if (autoAdd && products.length === 1) { addToCart(products[0]); document.getElementById('productSearch').value = ''; return; }
+
+        list.innerHTML = products.map(p => `
+    <div onclick="addToCart(${JSON.stringify(p).replace(/"/g, "&quot;")}); document.getElementById('productSearch').value=''; document.getElementById('searchResults').style.display='none';"
+         style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s;"
+         onmouseenter="this.style.background='rgba(79,70,229,0.1)'" onmouseleave="this.style.background=''">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div class="font-semibold text-sm">${p.name}</div>
+          <div class="text-xs text-muted">${p.barcode || ''} | Stock: ${p.quantity}</div>
+        </div>
+        <div class="text-primary font-bold">₹${p.selling_price.toFixed(2)}</div>
+      </div>
+    </div>
+  `).join('');
+        container.style.display = 'block';
+    }
+
+    function addToCart(product) {
+        if (product.quantity <= 0) { showToast(`"${product.name}" is out of stock!`, 'danger'); return; }
+        const existing = cart.find(i => i.product_id === product.id);
+        if (existing) {
+            if (existing.quantity >= product.quantity) { showToast('Cannot add more than available stock', 'warning'); return; }
+            existing.quantity++;
+        } else {
+            cart.push({
+                product_id: product.id, name: product.name, selling_price: product.selling_price,
+                cost_price: product.cost_price, tax_percent: product.tax_percent, unit: product.unit,
+                quantity: 1, max_qty: product.quantity
+            });
+        }
+        renderCart();
+        showToast(`Added "${product.name}"`, 'success', 1500);
+    }
+
+    function renderCart() {
+        const container = document.getElementById('cartItems');
+        const empty = document.getElementById('emptyCart');
+        if (cart.length === 0) { empty.style.display = ''; container.innerHTML = ''; container.appendChild(empty); calculateTotals(); return; }
+
+        empty.style.display = 'none';
+        container.innerHTML = cart.map((item, idx) => `
+    <div class="cart-item">
+      <div class="cart-item-info">
+        <div class="cart-item-name">${item.name}</div>
+        <div class="cart-item-price">₹${item.selling_price.toFixed(2)} / ${item.unit} — Total: ₹${(item.selling_price * item.quantity).toFixed(2)}</div>
+      </div>
+      <div class="cart-item-qty">
+        <button class="qty-btn" onclick="changeQty(${idx}, -1)">−</button>
+        <input class="qty-input" type="number" min="1" max="${item.max_qty}" value="${item.quantity}" onchange="setQty(${idx}, this.value)"/>
+        <button class="qty-btn" onclick="changeQty(${idx}, 1)">＋</button>
+        <button class="qty-btn btn-danger" onclick="removeItem(${idx})" style="margin-left:4px; background:rgba(239,68,68,0.15); border-color: var(--danger); color: var(--danger)">✕</button>
+      </div>
+    </div>
+  `).join('');
+        calculateTotals();
+    }
+
+    function changeQty(idx, delta) {
+        cart[idx].quantity += delta;
+        if (cart[idx].quantity <= 0) { cart.splice(idx, 1); }
+        else if (cart[idx].quantity > cart[idx].max_qty) { cart[idx].quantity = cart[idx].max_qty; showToast('Max stock reached', 'warning'); }
+        renderCart();
+    }
+
+    function setQty(idx, val) {
+        cart[idx].quantity = Math.max(1, Math.min(parseInt(val) || 1, cart[idx].max_qty));
+        renderCart();
+    }
+
+    function removeItem(idx) { cart.splice(idx, 1); renderCart(); }
+    function clearCart() { cart = []; renderCart(); }
+
+    function calculateTotals() {
+        const discount = parseFloat(document.getElementById('discountInput').value) || 0;
+        let subtotal = 0, tax = 0;
+        cart.forEach(i => { subtotal += i.selling_price * i.quantity; tax += (i.selling_price * i.quantity * i.tax_percent / 100); });
+        const discAmt = subtotal * discount / 100;
+        const total = subtotal - discAmt + tax;
+        const amtPaidInput = parseFloat(document.getElementById('amountPaidInput').value);
+        const amtPaid = isNaN(amtPaidInput) ? total : amtPaidInput;
+        const due = Math.max(0, total - amtPaid);
+
+        document.getElementById('subtotalVal').textContent = '₹' + subtotal.toFixed(2);
+        document.getElementById('discountVal').textContent = '-₹' + discAmt.toFixed(2);
+        document.getElementById('taxVal').textContent = '₹' + tax.toFixed(2);
+        document.getElementById('totalVal').textContent = '₹' + total.toFixed(2);
+        document.getElementById('dueVal').textContent = '₹' + due.toFixed(2);
+    }
+
+    document.getElementById('amountPaidInput').addEventListener('input', calculateTotals);
+
+    // Customer search
+    let customerTimeout;
+    document.getElementById('customerSearch').addEventListener('input', function () {
+        clearTimeout(customerTimeout);
+        const q = this.value.trim();
+        if (!q) { document.getElementById('customerResults').style.display = 'none'; return; }
+        customerTimeout = setTimeout(async () => {
+            const res = await fetch(`/customers/search?q=${encodeURIComponent(q)}`);
+            const customers = await res.json();
+            const results = document.getElementById('customerResults');
+            if (!customers.length) { results.style.display = 'none'; return; }
+            results.innerHTML = customers.map(c => `
+      <div onclick="selectCustomer(${c.id}, '${c.name}', '${c.phone || ''}', ${c.credit_balance})"
+           style="padding:10px 14px; cursor:pointer;" onmouseenter="this.style.background='rgba(79,70,229,0.1)'" onmouseleave="this.style.background=''">
+        <div class="font-semibold text-sm">${c.name}</div>
+        <div class="text-xs text-muted">${c.phone || ''} | Balance: ₹${c.credit_balance.toFixed(2)}</div>
+      </div>
+    `).join('');
+            results.style.display = 'block';
+        }, 300);
+    });
+
+    function selectCustomer(id, name, phone, balance) {
+        document.getElementById('selectedCustomerId').value = id;
+        document.getElementById('customerSearch').value = name;
+        document.getElementById('customerResults').style.display = 'none';
+        document.getElementById('selectedCustomerInfo').textContent = `📞 ${phone} | Outstanding: ₹${balance.toFixed(2)}`;
+    }
+
+    function toggleDelivery() {
+        const method = document.getElementById('deliveryMethod').value;
+        const group = document.getElementById('deliveryAddressGroup');
+        const label = document.getElementById('deliveryAddressLabel');
+        if (method === 'none') { group.style.display = 'none'; return; }
+        group.style.display = 'block';
+        label.textContent = method === 'email' ? 'Email Address' : 'WhatsApp Number';
+    }
+
+    async function submitBill() {
+        if (cart.length === 0) { showToast('Cart is empty!', 'warning'); return; }
+        const btn = document.getElementById('submitBillBtn');
+        btn.disabled = true; btn.textContent = '⏳ Processing...';
+
+        const discount = parseFloat(document.getElementById('discountInput').value) || 0;
+        const amtPaidInput = parseFloat(document.getElementById('amountPaidInput').value);
+        let subtotal = 0;
+        cart.forEach(i => subtotal += i.selling_price * i.quantity);
+        const discAmt = subtotal * discount / 100;
+
+        let tax = 0;
+        cart.forEach(i => tax += i.selling_price * i.quantity * i.tax_percent / 100);
+        const total = subtotal - discAmt + tax;
+        const amtPaid = isNaN(amtPaidInput) ? total : amtPaidInput;
+
+        const payload = {
+            customer_id: document.getElementById('selectedCustomerId').value || null,
+            items: cart.map(i => ({ product_id: i.product_id, name: i.name, quantity: i.quantity, unit_price: i.selling_price })),
+            discount_percent: discount,
+            payment_method: document.getElementById('paymentMethod').value,
+            amount_paid: amtPaid,
+            delivery_method: document.getElementById('deliveryMethod').value,
+            delivery_address: document.getElementById('deliveryAddress').value,
+            notes: document.getElementById('billNotes').value,
+        };
+
+        try {
+            const res = await fetch('/billing/new', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('successBody').innerHTML = `
+        <div style="font-size:3rem; margin-bottom:12px;">🎉</div>
+        <h3>Bill <b>${data.bill_no}</b> created!</h3>
+        <p class="text-muted mt-2">Total: ₹${total.toFixed(2)}</p>`;
+                document.getElementById('viewBillLink').href = `/billing/${data.bill_id}`;
+                document.getElementById('downloadPdfLink').href = `/billing/${data.bill_id}/pdf`;
+                document.getElementById('successModal').classList.add('active');
+                clearCart();
+            } else {
+                data.errors.forEach(e => showToast(e, 'danger'));
+            }
+        } catch (e) { showToast('Server error. Please try again.', 'danger'); }
+        finally { btn.disabled = false; btn.textContent = '✅ Create Bill'; }
+    }
+
+    function closeModal() { document.getElementById('successModal').classList.remove('active'); }
+
+    document.getElementById('successModal').addEventListener('click', function (e) {
+        if (e.target === this) closeModal();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}YourShop{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+<div class="app-layout">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🛒</div>
+      <h1>YourShop</h1>
+    </div>
+    {% if session.branch_name %}
+    <div class="branch-badge">
+      <span>Current Branch</span>
+      📍 {{ session.branch_name }}
+    </div>
+    {% endif %}
+
+    <nav class="nav-section">
+      <div class="nav-section-label">Main</div>
+      <a href="{{ url_for('dashboard.index') }}" class="nav-item {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+        <span class="nav-icon">📊</span> Dashboard
+      </a>
+      <a href="{{ url_for('billing.new_bill') }}" class="nav-item {% if request.endpoint == 'billing.new_bill' %}active{% endif %}">
+        <span class="nav-icon">🧾</span> New Bill (POS)
+      </a>
+
+      <div class="nav-section-label mt-3">Manage</div>
+      <a href="{{ url_for('inventory.index') }}" class="nav-item {% if 'inventory' in request.endpoint %}active{% endif %}">
+        <span class="nav-icon">📦</span> Inventory
+      </a>
+      <a href="{{ url_for('billing.index') }}" class="nav-item {% if request.endpoint == 'billing.index' %}active{% endif %}">
+        <span class="nav-icon">📋</span> Bills & Orders
+      </a>
+      <a href="{{ url_for('customers.index') }}" class="nav-item {% if 'customers' in request.endpoint %}active{% endif %}">
+        <span class="nav-icon">👥</span> Customers
+      </a>
+      <a href="{{ url_for('suppliers.index') }}" class="nav-item {% if 'suppliers' in request.endpoint %}active{% endif %}">
+        <span class="nav-icon">🚚</span> Suppliers
+      </a>
+
+      <div class="nav-section-label mt-3">Analytics</div>
+      <a href="{{ url_for('reports.index') }}" class="nav-item {% if 'reports' in request.endpoint %}active{% endif %}">
+        <span class="nav-icon">📈</span> Profit & Loss
+      </a>
+
+      <div class="nav-section-label mt-3">System</div>
+      <a href="{{ url_for('settings.index') }}" class="nav-item {% if 'settings' in request.endpoint %}active{% endif %}">
+        <span class="nav-icon">⚙️</span> Settings
+      </a>
+      <a href="{{ url_for('auth.logout') }}" class="nav-item">
+        <span class="nav-icon">🚪</span> Logout
+      </a>
+    </nav>
+
+    {% if current_user.is_admin() %}
+    <div class="nav-section" style="margin-top: 8px;">
+      <div class="nav-section-label">Switch Branch</div>
+      {% for branch in branches if branches is defined %}
+      <a href="{{ url_for('auth.switch_branch', branch_id=branch.id) }}" class="nav-item text-sm">
+        <span class="nav-icon">📍</span> {{ branch.name }}
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="sidebar-footer">
+      Logged in as <b>{{ current_user.name }}</b><br>
+      <span style="color: var(--primary-light)">{{ current_user.role.title() }}</span>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main-content">
+    <header class="topbar">
+      <button class="btn btn-icon btn-outline" id="sidebarToggle" style="display:none">☰</button>
+      <span class="topbar-title">{% block topbar_title %}{% endblock %}</span>
+      <div class="topbar-actions">
+        {% block topbar_actions %}{% endblock %}
+        <div class="user-avatar" title="{{ current_user.email }}">{{ current_user.name[0].upper() }}</div>
+      </div>
+    </header>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div style="padding: 0 28px; margin-top: 16px;">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else category }}">
+          <span>{{ '✅' if category == 'success' else '⚠️' if category == 'warning' else '❌' if category == 'danger' else 'ℹ️' }}</span>
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+
+    <main class="page">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+{% block modals %}{% endblock %}
+
+<script>
+function showToast(message, type='info', duration=4000) {
+  const icons = {success:'✅', danger:'❌', warning:'⚠️', info:'ℹ️'};
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<span>${icons[type]||'ℹ️'}</span><span>${message}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease forwards';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+// Sidebar toggle for mobile
+document.getElementById('sidebarToggle')?.addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

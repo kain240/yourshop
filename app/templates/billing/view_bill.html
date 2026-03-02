@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+{% block title %}Bill {{ bill.bill_no }} — YourShop{% endblock %}
+{% block topbar_title %}🧾 Bill {{ bill.bill_no }}{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('billing.download_pdf', bill_id=bill.id) }}" class="btn btn-outline btn-sm">📄 PDF</a>
+<button class="btn btn-primary btn-sm" onclick="document.getElementById('sendModal').classList.add('active')">📤
+    Send</button>
+{% if bill.amount_due > 0 %}
+<button class="btn btn-success btn-sm" onclick="initRazorpay()">💳 Collect Online</button>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="grid-2" style="margin-bottom:20px;">
+    <div class="card">
+        <div class="card-header"><span class="card-title">Bill Info</span>
+            <span
+                class="badge badge-{{ 'success' if bill.status == 'paid' else 'warning' if bill.status == 'partial' else 'danger' if bill.status == 'credit' else 'secondary' }}">{{
+                bill.status.upper() }}</span>
+        </div>
+        <table style="font-size:0.875rem;">
+            <tr>
+                <td class="text-muted" style="padding:6px 0; width:130px;">Bill No</td>
+                <td class="font-semibold">{{ bill.bill_no }}</td>
+            </tr>
+            <tr>
+                <td class="text-muted" style="padding:6px 0;">Date</td>
+                <td>{{ bill.bill_date.strftime('%d %b %Y, %I:%M %p') }}</td>
+            </tr>
+            <tr>
+                <td class="text-muted" style="padding:6px 0;">Customer</td>
+                <td>{{ bill.customer_name }}</td>
+            </tr>
+            {% if bill.customer %}
+            <tr>
+                <td class="text-muted" style="padding:6px 0;">Phone</td>
+                <td>{{ bill.customer.phone or '—' }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td class="text-muted" style="padding:6px 0;">Created by</td>
+                <td>{{ bill.user.name }}</td>
+            </tr>
+            {% if bill.notes %}<tr>
+                <td class="text-muted" style="padding:6px 0;">Notes</td>
+                <td>{{ bill.notes }}</td>
+            </tr>{% endif %}
+        </table>
+    </div>
+    <div class="card">
+        <div class="card-header"><span class="card-title">Payment Summary</span></div>
+        <div style="font-size:0.95rem;">
+            <div class="total-row"><span class="text-muted">Subtotal</span><span>₹{{ "{:,.2f}".format(bill.subtotal)
+                    }}</span></div>
+            <div class="total-row"><span class="text-muted">Discount ({{ bill.discount_percent }}%)</span><span
+                    class="text-success">-₹{{ "{:,.2f}".format(bill.discount_amount) }}</span></div>
+            <div class="total-row"><span class="text-muted">Tax</span><span>₹{{ "{:,.2f}".format(bill.tax_amount)
+                    }}</span></div>
+            <div class="total-row grand"><span>TOTAL</span><span class="text-primary">₹{{ "{:,.2f}".format(bill.total)
+                    }}</span></div>
+            <div class="total-row"><span class="text-muted">Paid</span><span class="text-success">₹{{
+                    "{:,.2f}".format(bill.amount_paid) }}</span></div>
+            {% if bill.amount_due > 0 %}
+            <div class="total-row"><span class="text-muted">Due</span><span class="text-danger font-bold">₹{{
+                    "{:,.2f}".format(bill.amount_due) }}</span></div>
+            {% endif %}
+        </div>
+        {% if bill.amount_due > 0 %}
+        <button onclick="document.getElementById('collectPayModal').classList.add('active')"
+            class="btn btn-success w-full mt-3" style="justify-content:center;">💵 Record Payment</button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Items Table -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><span class="card-title">Items</span>
+        <a href="{{ url_for('billing.create_return', bill_id=bill.id) }}" class="btn btn-outline btn-sm">↩
+            Return/Exchange</a>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Rate</th>
+                    <th>Tax</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in bill.items %}
+                <tr>
+                    <td class="text-muted">{{ loop.index }}</td>
+                    <td>
+                        <div class="font-semibold">{{ item.product_name }}</div>
+                        {% if item.batch %}<div class="text-xs text-muted">Batch: {{ item.batch.batch_no or '—' }}{% if
+                            item.batch.expiry_date %} | Exp: {{ item.batch.expiry_date.strftime('%d %b %Y') }}{% endif
+                            %}</div>{% endif %}
+                    </td>
+                    <td>{{ item.quantity }}</td>
+                    <td>₹{{ "{:,.2f}".format(item.unit_price) }}</td>
+                    <td class="text-sm text-muted">₹{{ "{:,.2f}".format(item.tax_amount) }}</td>
+                    <td class="font-semibold">₹{{ "{:,.2f}".format(item.total_price) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Returns -->
+{% set returns = bill.returns.all() %}
+{% if returns %}
+<div class="card">
+    <div class="card-header"><span class="card-title">↩ Returns & Exchanges</span></div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Return No</th>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Type</th>
+                    <th>Refund</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>{% for r in returns %}
+                <tr>
+                    <td class="text-sm">{{ r.return_no }}</td>
+                    <td>{{ r.product.name }}</td>
+                    <td>{{ r.quantity }}</td>
+                    <td><span class="badge badge-info">{{ r.return_type }}</span></td>
+                    <td>₹{{ "{:,.2f}".format(r.refund_amount) }}</td>
+                    <td class="text-sm text-muted">{{ r.created_at.strftime('%d %b %Y') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block modals %}
+<!-- Send Modal -->
+<div class="modal-overlay" id="sendModal">
+    <div class="modal">
+        <div class="modal-header"><span class="modal-title">📤 Send Bill</span><button class="modal-close"
+                onclick="document.getElementById('sendModal').classList.remove('active')">✕</button></div>
+        <form method="POST" action="{{ url_for('billing.send_bill', bill_id=bill.id) }}">
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">Send via</label>
+                    <select name="method" class="form-control" required>
+                        <option value="email">📧 Email</option>
+                        <option value="whatsapp">💬 WhatsApp</option>
+                    </select>
+                </div>
+                <div class="form-group"><label class="form-label">Address / Phone</label>
+                    <input type="text" name="address" class="form-control" placeholder="email@example.com or 9876543210"
+                        value="{{ bill.customer.email if bill.customer and bill.customer.email else '' }}" required />
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary">Send</button><button type="button"
+                    class="btn btn-secondary"
+                    onclick="document.getElementById('sendModal').classList.remove('active')">Cancel</button></div>
+        </form>
+    </div>
+</div>
+
+<!-- Collect Payment Modal -->
+<div class="modal-overlay" id="collectPayModal">
+    <div class="modal">
+        <div class="modal-header"><span class="modal-title">💵 Record Payment</span><button class="modal-close"
+                onclick="document.getElementById('collectPayModal').classList.remove('active')">✕</button></div>
+        {% if bill.customer %}
+        <form method="POST" action="{{ url_for('customers.record_payment', customer_id=bill.customer_id) }}">
+            {% else %}
+            <form>
+                {% endif %}
+                <div class="modal-body">
+                    <div class="form-group"><label class="form-label">Amount (₹)</label>
+                        <input type="number" name="amount" class="form-control" value="{{ bill.amount_due }}"
+                            step="0.01" required />
+                    </div>
+                    <div class="form-group"><label class="form-label">Method</label>
+                        <select name="method" class="form-control">
+                            <option value="cash">Cash</option>
+                            <option value="upi">UPI</option>
+                            <option value="card">Card</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer"><button class="btn btn-success">Record</button><button type="button"
+                        class="btn btn-secondary"
+                        onclick="document.getElementById('collectPayModal').classList.remove('active')">Cancel</button>
+                </div>
+            </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+    async function initRazorpay() {
+        const res = await fetch('/payments/create-order/{{ bill.id }}', { method: 'POST' });
+        if (!res.ok) { showToast('Could not create order. Check Razorpay config.', 'danger'); return; }
+        const data = await res.json();
+        if (data.error) { showToast(data.error, 'danger'); return; }
+        const rzp = new Razorpay({
+            key: data.key,
+            amount: data.amount,
+            currency: data.currency,
+            name: 'YourShop',
+            description: `Bill ${data.bill_no}`,
+            order_id: data.order_id,
+            handler: async function (resp) {
+                const verRes = await fetch('/payments/verify', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...resp, bill_id: {{ bill.id }} })
+    });
+    const vd = await verRes.json();
+    if (vd.success) { showToast('Payment successful!', 'success'); setTimeout(() => location.reload(), 1500); }
+    else showToast('Payment verification failed.', 'danger');
+    },
+    prefill: { name: '{{ bill.customer_name }}', {{ "email: '" + bill.customer.email + "'," if bill.customer and bill.customer.email else '' } } { { "contact: '" + bill.customer.phone + "'" if bill.customer and bill.customer.phone else '' } } }
+  });
+    rzp.open();
+}
+</script>
+{% endblock %}

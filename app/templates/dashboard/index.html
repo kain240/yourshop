@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — YourShop{% endblock %}
+{% block topbar_title %}📊 Dashboard{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('billing.new_bill') }}" class="btn btn-primary btn-sm">＋ New Bill</a>
+{% endblock %}
+
+{% block content %}
+<!-- Stats Grid -->
+<div class="stat-grid">
+    <div class="stat-card primary">
+        <div class="stat-icon">💰</div>
+        <div class="stat-value">₹{{ "{:,.0f}".format(today_revenue) }}</div>
+        <div class="stat-label">Today's Revenue</div>
+    </div>
+    <div class="stat-card info">
+        <div class="stat-icon">🧾</div>
+        <div class="stat-value">{{ today_bills_count }}</div>
+        <div class="stat-label">Bills Today</div>
+    </div>
+    <div class="stat-card success">
+        <div class="stat-icon">📅</div>
+        <div class="stat-value">₹{{ "{:,.0f}".format(monthly_revenue) }}</div>
+        <div class="stat-label">Monthly Revenue</div>
+    </div>
+    <div class="stat-card warning">
+        <div class="stat-icon">📦</div>
+        <div class="stat-value">{{ low_stock|length }}</div>
+        <div class="stat-label">Low Stock Items</div>
+    </div>
+    <div class="stat-card danger">
+        <div class="stat-icon">👥</div>
+        <div class="stat-value">₹{{ "{:,.0f}".format(pending_dues) }}</div>
+        <div class="stat-label">Customer Dues</div>
+    </div>
+    <div class="stat-card info">
+        <div class="stat-icon">🚚</div>
+        <div class="stat-value">₹{{ "{:,.0f}".format(supplier_outstanding) }}</div>
+        <div class="stat-label">Supplier Outstanding</div>
+    </div>
+</div>
+
+<!-- Charts + Alerts -->
+<div class="grid-2" style="margin-bottom: 24px;">
+    <!-- Sales Chart -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">📈 Sales — Last 7 Days</span>
+        </div>
+        <div class="chart-container" style="height: 220px;">
+            <canvas id="salesChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">🔔 Alerts</span>
+        </div>
+        {% if low_stock %}
+        <div class="alert alert-warning">⚠️ <b>{{ low_stock|length }}</b> products have low stock</div>
+        {% endif %}
+        {% if expiring_batches %}
+        <div class="alert alert-danger">⏰ <b>{{ expiring_batches|length }}</b> batches expiring within 30 days</div>
+        {% endif %}
+        {% if pending_dues > 0 %}
+        <div class="alert alert-info">💳 Customer dues outstanding: ₹{{ "{:,.2f}".format(pending_dues) }}</div>
+        {% endif %}
+        {% if not low_stock and not expiring_batches and pending_dues == 0 %}
+        <div class="empty-state" style="padding: 30px;">
+            <div class="empty-icon">✅</div>
+            <p>All clear! No alerts.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Low Stock + Expiring -->
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">📦 Low Stock Items</span>
+            <a href="{{ url_for('inventory.index') }}?stock=low" class="btn btn-outline btn-sm">View All</a>
+        </div>
+        {% if low_stock %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Qty</th>
+                        <th>Threshold</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in low_stock[:8] %}
+                    <tr>
+                        <td>{{ p.name }}</td>
+                        <td><span class="badge badge-danger">{{ p.total_quantity }}</span></td>
+                        <td class="text-muted text-sm">{{ p.low_stock_threshold }}</td>
+                        <td><a href="{{ url_for('inventory.edit_product', product_id=p.id) }}"
+                                class="btn btn-sm btn-outline">Restock</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding: 30px;">
+            <div class="empty-icon">✅</div>
+            <p>Stock levels are fine.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">⏰ Expiring Soon</span>
+            <a href="{{ url_for('inventory.index') }}?expiry=expiring" class="btn btn-outline btn-sm">View All</a>
+        </div>
+        {% if expiring_batches %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Batch</th>
+                        <th>Expiry</th>
+                        <th>Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in expiring_batches %}
+                    <tr>
+                        <td>{{ b.product.name }}</td>
+                        <td class="text-sm text-muted">{{ b.batch_no or '—' }}</td>
+                        <td>
+                            <span class="badge {{ 'badge-danger' if b.days_to_expiry <= 7 else 'badge-warning' }}">
+                                {{ b.expiry_date.strftime('%d %b %Y') }}
+                            </span>
+                        </td>
+                        <td>{{ b.quantity }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding: 30px;">
+            <div class="empty-icon">✅</div>
+            <p>No items expiring soon.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const salesData = {{ sales_chart | tojson }};
+    new Chart(document.getElementById('salesChart'), {
+        type: 'bar',
+        data: {
+            labels: salesData.map(d => d.date),
+            datasets: [{
+                label: 'Revenue (₹)',
+                data: salesData.map(d => d.amount),
+                backgroundColor: 'rgba(79,70,229,0.7)',
+                borderColor: '#4F46E5',
+                borderWidth: 1,
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { color: '#334155' }, ticks: { color: '#94A3B8' } },
+                y: { grid: { color: '#334155' }, ticks: { color: '#94A3B8', callback: v => '₹' + v.toLocaleString() } }
+            }
+        }
+    });
+</script>
+{% endblock %}
