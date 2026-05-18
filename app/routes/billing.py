@@ -19,7 +19,7 @@ def get_branch_id():
 
 
 @billing_bp.route('/')
-@login_required
+#@login_required
 def index():
     branch_id = get_branch_id()
     page = request.args.get('page', 1, type=int)
