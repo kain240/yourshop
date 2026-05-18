@@ -51,19 +51,33 @@ def register():
         name = request.form.get('name')
         email = request.form.get('email').strip().lower()
         password = request.form.get('password')
-        
+
         if User.query.filter_by(email=email).first():
             flash('Email already exists.', 'danger')
             return redirect(url_for('auth.register'))
-        
-        user = User(name=name, email=email, is_active=True)
+
+        # Create a default branch if none exists
+        branch = Branch.query.first()
+        if not branch:
+            branch = Branch(name='Main Branch', is_active=True)
+            db.session.add(branch)
+            db.session.commit()
+
+        user = User(name=name, email=email, role='admin', branch_id=branch.id, is_active=True)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
         flash('Account created! Please log in.', 'success')
         return redirect(url_for('auth.login'))
-    
-    return render_template('auth/register.html')
+
+    return '''
+        <form method="POST">
+            <input name="name" placeholder="Name" required><br>
+            <input name="email" placeholder="Email" required><br>
+            <input name="password" type="password" placeholder="Password" required><br>
+            <button type="submit">Register</button>
+        </form>
+    '''
 
 
 @auth_bp.route('/logout')
