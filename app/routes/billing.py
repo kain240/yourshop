@@ -19,7 +19,7 @@ def get_branch_id():
 
 
 @billing_bp.route('/')
-#@login_required
+@login_required
 def index():
     branch_id = get_branch_id()
     page = request.args.get('page', 1, type=int)
@@ -46,7 +46,7 @@ def index():
 
 
 @billing_bp.route('/new', methods=['GET', 'POST'])
-#@login_required
+@login_required
 def new_bill():
     branch_id = get_branch_id()
     customers = Customer.query.filter_by(branch_id=branch_id, is_active=True).order_by(Customer.name).all()
@@ -236,7 +236,7 @@ def view_bill(bill_id):
 
 
 @billing_bp.route('/<int:bill_id>/pdf')
-#@login_required
+@login_required
 def download_pdf(bill_id):
     from flask import send_file
     bill = Bill.query.get_or_404(bill_id)
@@ -249,7 +249,7 @@ def download_pdf(bill_id):
 
 
 @billing_bp.route('/<int:bill_id>/send', methods=['POST'])
-#@login_required
+@login_required
 def send_bill(bill_id):
     bill = Bill.query.get_or_404(bill_id)
     method = request.form.get('method')
@@ -276,7 +276,7 @@ def send_bill(bill_id):
 
 
 @billing_bp.route('/<int:bill_id>/return', methods=['GET', 'POST'])
-#@login_required
+@login_required
 def create_return(bill_id):
     bill = Bill.query.get_or_404(bill_id)
 
