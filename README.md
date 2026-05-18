@@ -2,6 +2,10 @@
 
 A web-based retail shop management system built with Flask.
 
+## 🚀 Live Demo
+
+👉 [https://yourshop-3.onrender.com](https://yourshop-3.onrender.com/login?next=%2F)
+
 ## Features
 
 - 🔐 User authentication with role-based access (Admin, Manager, Staff)
