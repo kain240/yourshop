@@ -45,6 +45,27 @@ def login():
     return render_template('auth/login.html', branches=branches)
 
 
+@auth_bp.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        name = request.form.get('name')
+        email = request.form.get('email').strip().lower()
+        password = request.form.get('password')
+        
+        if User.query.filter_by(email=email).first():
+            flash('Email already exists.', 'danger')
+            return redirect(url_for('auth.register'))
+        
+        user = User(name=name, email=email, is_active=True)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        flash('Account created! Please log in.', 'success')
+        return redirect(url_for('auth.login'))
+    
+    return render_template('auth/register.html')
+
+
 @auth_bp.route('/logout')
 @login_required
 def logout():
