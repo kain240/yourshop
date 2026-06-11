@@ -4,7 +4,7 @@ A web-based retail shop management system built with Flask.
 
 ## 🚀 Live Demo
 
-👉 [https://kain240.pythonanywhere.com](https://kain240.pythonanywhere.com)
+👉 [https://yourshop-3.onrender.com/](https://yourshop-3.onrender.com/)
 
 ## Features
 
