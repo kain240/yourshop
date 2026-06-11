@@ -97,17 +97,20 @@ def index():
     ).group_by(Product.id, Product.name).order_by(func.sum(BillItem.quantity).desc()).limit(10).all()
 
     # Category breakdown
+    from app.models.inventory import Category
     category_data = db.session.query(
-        db.text('categories.name'),
+        Category.name,
         func.sum(BillItem.total_price).label('revenue')
-    ).select_from(BillItem).join(Bill).join(Product, BillItem.product_id == Product.id).join(
-        db.text('categories'), db.text('products.category_id = categories.id'), isouter=True
-    ).filter(
+    ).select_from(BillItem)\
+     .join(Bill, BillItem.bill_id == Bill.id)\
+     .join(Product, BillItem.product_id == Product.id)\
+     .outerjoin(Category, Product.category_id == Category.id)\
+     .filter(
         Bill.branch_id == branch_id,
         func.date(Bill.bill_date) >= d_from,
         func.date(Bill.bill_date) <= d_to,
         Bill.status != 'cancelled'
-    ).group_by(db.text('categories.name')).all()
+     ).group_by(Category.name).all()
 
     return render_template('reports/index.html',
         revenue=float(revenue),

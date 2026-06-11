@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Customers — YourShop{% endblock %}
+{% block topbar_title %}👥 Customers{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('customers.add_customer') }}" class="btn btn-primary btn-sm">＋ Add Customer</a>
+{% endblock %}
+{% block content %}
+<div class="card">
+    <form method="GET" style="display:flex; gap:12px; margin-bottom:20px;">
+        <div class="search-bar" style="flex:1;"><span class="search-icon">🔍</span>
+            <input type="text" name="q" class="form-control" placeholder="Search by name, phone, email..."
+                value="{{ q }}" />
+        </div>
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+    {% if customers %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Email</th>
+                    <th>Due Balance</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>{% for c in customers %}
+                <tr>
+                    <td class="font-semibold">{{ c.name }}</td>
+                    <td class="text-muted">{{ c.phone or '—' }}</td>
+                    <td class="text-muted text-sm">{{ c.email or '—' }}</td>
+                    <td>{% if c.credit_balance > 0 %}<span class="badge badge-danger">₹{{
+                            "{:,.2f}".format(c.credit_balance) }}</span>{% else %}<span
+                            class="badge badge-success">Nil</span>{% endif %}</td>
+                    <td>
+                        <div class="td-actions">
+                            <a href="{{ url_for('customers.view_customer', customer_id=c.id) }}"
+                                class="btn btn-sm btn-primary">View</a>
+                            <a href="{{ url_for('customers.edit_customer', customer_id=c.id) }}"
+                                class="btn btn-sm btn-outline">Edit</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<div class="empty-state">
+        <div class="empty-icon">👥</div>
+        <h3>No customers found</h3><a href="{{ url_for('customers.add_customer') }}" class="btn btn-primary mt-4">＋ Add
+            Customer</a>
+    </div>{% endif %}
+</div>
+{% endblock %}

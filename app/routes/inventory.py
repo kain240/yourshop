@@ -51,7 +51,7 @@ def index():
 
     categories = Category.query.all()
     return render_template('inventory/index.html',
-        products=products, categories=categories, q=q,
+        products=products, categories=categories, q=q, today=today,
         category_id=category_id, stock_filter=stock_filter, expiry_filter=expiry_filter
     )
 
@@ -63,6 +63,10 @@ def add_product():
     categories = Category.query.all()
 
     if request.method == 'POST':
+        if not branch_id:
+            flash('No branch selected. Please log out and log in again, selecting a branch.', 'danger')
+            return render_template('inventory/product_form.html', categories=categories, product=None)
+
         barcode = request.form.get('barcode', '').strip() or None
         if barcode:
             existing = Product.query.filter_by(barcode=barcode).first()

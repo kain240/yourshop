@@ -13,7 +13,8 @@ mail = Mail()
 
 def create_app():
     app = Flask(__name__)
-    app.config.from_object('app.config.Config')
+    from app.config import get_config
+    app.config.from_object(get_config())
 
     # Ensure upload folder exists (uses /tmp on ephemeral platforms)
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)

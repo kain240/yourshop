@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Categories — YourShop{% endblock %}
+{% block topbar_title %}🏷 Categories{% endblock %}
+{% block content %}
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header"><span class="card-title">All Categories</span></div>
+        {% if categories %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Products</th>
+                    </tr>
+                </thead>
+                <tbody>{% for c in categories %}
+                    <tr>
+                        <td class="font-semibold">{{ c.name }}</td>
+                        <td><span class="badge badge-primary">{{ c.products.count() }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<div class="empty-state" style="padding:30px;">
+            <div class="empty-icon">🏷</div>
+            <p>No categories yet</p>
+        </div>{% endif %}
+    </div>
+    <div class="card">
+        <div class="card-header"><span class="card-title">＋ Add Category</span></div>
+        <form method="POST">
+            <div class="form-group"><label class="form-label">Category Name *</label><input type="text" name="name"
+                    class="form-control" placeholder="e.g. Beverages" required /></div>
+            <div class="form-group"><label class="form-label">Description</label><input type="text" name="description"
+                    class="form-control" placeholder="Optional" /></div>
+            <button type="submit" class="btn btn-primary">Add Category</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

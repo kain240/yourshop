@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Bills — YourShop{% endblock %}
+{% block topbar_title %}📋 Bills & Orders{% endblock %}
+{% block topbar_actions %}<a href="{{ url_for('billing.new_bill') }}" class="btn btn-primary btn-sm">＋ New Bill</a>{%
+endblock %}
+{% block content %}
+<div class="card">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+        <div class="search-bar" style="flex:1;min-width:200px;"><span class="search-icon">🔍</span>
+            <input type="text" name="q" class="form-control" placeholder="Bill no, customer..." value="{{ q }}" />
+        </div>
+        <select name="status" class="form-control" style="width:130px;">
+            <option value="">All Status</option>
+            <option value="paid" {{ 'selected' if status=='paid' }}>Paid</option>
+            <option value="partial" {{ 'selected' if status=='partial' }}>Partial</option>
+            <option value="credit" {{ 'selected' if status=='credit' }}>Credit</option>
+            <option value="cancelled" {{ 'selected' if status=='cancelled' }}>Cancelled</option>
+        </select>
+        <input type="date" name="date_from" class="form-control" style="width:150px;" value="{{ date_from }}" />
+        <input type="date" name="date_to" class="form-control" style="width:150px;" value="{{ date_to }}" />
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a href="{{ url_for('billing.index') }}" class="btn btn-outline">Reset</a>
+    </form>
+    {% if bills.items %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Bill No</th>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Due</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>{% for b in bills.items %}
+                <tr>
+                    <td class="font-semibold text-primary">{{ b.bill_no }}</td>
+                    <td class="text-sm text-muted">{{ b.bill_date.strftime('%d %b %Y') }}</td>
+                    <td>{{ b.customer_name }}</td>
+                    <td class="font-semibold">₹{{ "{:,.2f}".format(b.total) }}</td>
+                    <td class="text-success">₹{{ "{:,.2f}".format(b.amount_paid) }}</td>
+                    <td class="{{ 'text-danger font-semibold' if b.amount_due > 0 else 'text-muted' }}">₹{{
+                        "{:,.2f}".format(b.amount_due) }}</td>
+                    <td><span
+                            class="badge badge-{{ 'success' if b.status=='paid' else 'warning' if b.status=='partial' else 'danger' if b.status=='credit' else 'secondary' }}">{{
+                            b.status }}</span></td>
+                    <td>
+                        <div class="td-actions">
+                            <a href="{{ url_for('billing.view_bill', bill_id=b.id) }}"
+                                class="btn btn-sm btn-primary">View</a>
+                            <a href="{{ url_for('billing.download_pdf', bill_id=b.id) }}"
+                                class="btn btn-sm btn-outline">📄</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if bills.pages > 1 %}
+    <div class="pagination mt-4">
+        {% for p in bills.iter_pages() %}
+        {% if p %}<a href="{{ url_for('billing.index', page=p, q=q, status=status) }}"
+            class="page-btn {{ 'active' if p == bills.page }}">{{ p }}</a>{% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% else %}<div class="empty-state">
+        <div class="empty-icon">🧾</div>
+        <h3>No bills found</h3>
+    </div>{% endif %}
+</div>
+{% endblock %}

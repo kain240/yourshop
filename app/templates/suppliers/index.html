@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Suppliers — YourShop{% endblock %}
+{% block topbar_title %}🚚 Suppliers{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('suppliers.add_supplier') }}" class="btn btn-primary btn-sm">＋ Add Supplier</a>
+{% endblock %}
+{% block content %}
+<div class="card">
+    <form method="GET" style="display:flex; gap:12px; margin-bottom:20px;">
+        <div class="search-bar" style="flex:1;"><span class="search-icon">🔍</span>
+            <input type="text" name="q" class="form-control" placeholder="Search suppliers..." value="{{ q }}" />
+        </div>
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+    {% if suppliers %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Supplier</th>
+                    <th>Contact</th>
+                    <th>Phone</th>
+                    <th>Outstanding</th>
+                    <th>Last Payment</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>{% for s in suppliers %}
+                <tr>
+                    <td>
+                        <div class="font-semibold">{{ s.name }}</div>
+                        <div class="text-xs text-muted">{{ s.contact_person or '' }}</div>
+                    </td>
+                    <td class="text-muted text-sm">{{ s.email or '—' }}</td>
+                    <td class="text-muted">{{ s.phone or '—' }}</td>
+                    <td>{% if s.outstanding_amount > 0 %}<span class="badge badge-danger">₹{{
+                            "{:,.2f}".format(s.outstanding_amount) }}</span>{% else %}<span
+                            class="badge badge-success">Clear</span>{% endif %}</td>
+                    <td class="text-sm text-muted">{% set lp = s.last_payment %}{% if lp %}{{ lp.created_at.strftime('%d
+                        %b %Y') }} — ₹{{ "{:,.2f}".format(lp.amount) }}{% else %}No payments{% endif %}</td>
+                    <td>
+                        <div class="td-actions">
+                            <a href="{{ url_for('suppliers.view_supplier', supplier_id=s.id) }}"
+                                class="btn btn-sm btn-primary">View</a>
+                            <a href="{{ url_for('suppliers.edit_supplier', supplier_id=s.id) }}"
+                                class="btn btn-sm btn-outline">Edit</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<div class="empty-state">
+        <div class="empty-icon">🚚</div>
+        <h3>No suppliers found</h3><a href="{{ url_for('suppliers.add_supplier') }}" class="btn btn-primary mt-4">＋ Add
+            Supplier</a>
+    </div>{% endif %}
+</div>
+{% endblock %}

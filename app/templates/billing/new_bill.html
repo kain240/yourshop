@@ -43,7 +43,7 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Payment Method</label>
-                    <select id="paymentMethod" class="form-control">
+                    <select id="paymentMethod" class="form-control" onchange="calculateTotals()">
                         <option value="cash">💵 Cash</option>
                         <option value="upi">📱 UPI</option>
                         <option value="card">💳 Card</option>
@@ -52,9 +52,26 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Amount Paid (₹)</label>
+                    <label class="form-label">Bill Total (₹)</label>
+                    <input id="billTotalDisplay" type="text" class="form-control" readonly
+                        style="background:var(--bg-hover); font-weight:600; cursor:default;" placeholder="₹0.00" />
+                </div>
+            </div>
+            <!-- Payment breakdown -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Amount Paid Now (₹)</label>
                     <input id="amountPaidInput" type="number" class="form-control" min="0" step="0.01"
-                        placeholder="Leave blank for full amount" />
+                        placeholder="0 = fully pending" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Pending Balance (₹)</label>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input id="pendingDisplay" type="text" class="form-control" readonly
+                            style="background:var(--bg-hover); cursor:default; font-weight:600;" placeholder="₹0.00" />
+                        <span id="paymentStatusBadge"
+                            style="white-space:nowrap; font-size:0.78rem; padding:4px 10px; border-radius:20px; font-weight:600;"></span>
+                    </div>
                 </div>
             </div>
             <div class="form-row">
@@ -94,7 +111,10 @@
             <div class="total-row"><span>Discount</span><span id="discountVal" class="text-success">-₹0.00</span></div>
             <div class="total-row"><span>Tax</span><span id="taxVal">₹0.00</span></div>
             <div class="total-row grand"><span>TOTAL</span><span id="totalVal" class="text-primary">₹0.00</span></div>
-            <div class="total-row" style="color: var(--text-dim)"><span>Amount Due</span><span id="dueVal">₹0.00</span>
+            <div class="total-row" style="color:var(--success, #22c55e);"><span>Paid Now</span><span
+                    id="paidNowVal">₹0.00</span></div>
+            <div class="total-row" id="pendingRow" style="color:var(--warning, #f59e0b); font-weight:600;"><span>⏳
+                    Pending</span><span id="dueVal">₹0.00</span>
             </div>
             <button id="submitBillBtn" onclick="submitBill()" class="btn btn-success w-full btn-lg mt-3"
                 style="justify-content:center;">
@@ -126,6 +146,7 @@
 {% block scripts %}
 <script>
     let cart = [];
+    let userModifiedAmtPaid = false;
 
     // Product search
     let searchTimeout;
@@ -185,21 +206,26 @@
 
     function renderCart() {
         const container = document.getElementById('cartItems');
-        const empty = document.getElementById('emptyCart');
-        if (cart.length === 0) { empty.style.display = ''; container.innerHTML = ''; container.appendChild(empty); calculateTotals(); return; }
-
-        empty.style.display = 'none';
+        if (cart.length === 0) {
+            container.innerHTML = `<div class="empty-state" style="padding:40px 20px;">
+              <div class="empty-icon">🛒</div>
+              <p>Cart is empty</p>
+              <p class="text-sm text-muted">Search and add products above</p>
+            </div>`;
+            calculateTotals();
+            return;
+        }
         container.innerHTML = cart.map((item, idx) => `
     <div class="cart-item">
       <div class="cart-item-info">
         <div class="cart-item-name">${item.name}</div>
-        <div class="cart-item-price">₹${item.selling_price.toFixed(2)} / ${item.unit} — Total: ₹${(item.selling_price * item.quantity).toFixed(2)}</div>
+        <div class="cart-item-price">₹${item.selling_price.toFixed(2)} / ${item.unit} &mdash; Total: ₹${(item.selling_price * item.quantity).toFixed(2)}</div>
       </div>
       <div class="cart-item-qty">
         <button class="qty-btn" onclick="changeQty(${idx}, -1)">−</button>
         <input class="qty-input" type="number" min="1" max="${item.max_qty}" value="${item.quantity}" onchange="setQty(${idx}, this.value)"/>
-        <button class="qty-btn" onclick="changeQty(${idx}, 1)">＋</button>
-        <button class="qty-btn btn-danger" onclick="removeItem(${idx})" style="margin-left:4px; background:rgba(239,68,68,0.15); border-color: var(--danger); color: var(--danger)">✕</button>
+        <button class="qty-btn" onclick="changeQty(${idx}, 1)">+</button>
+        <button class="qty-btn" onclick="removeItem(${idx})" style="margin-left:4px; background:rgba(239,68,68,0.15); border:1px solid var(--danger); color:var(--danger);">✕</button>
       </div>
     </div>
   `).join('');
@@ -219,7 +245,12 @@
     }
 
     function removeItem(idx) { cart.splice(idx, 1); renderCart(); }
-    function clearCart() { cart = []; renderCart(); }
+    function clearCart() {
+        cart = [];
+        userModifiedAmtPaid = false;
+        document.getElementById('amountPaidInput').value = '';
+        renderCart();
+    }
 
     function calculateTotals() {
         const discount = parseFloat(document.getElementById('discountInput').value) || 0;
@@ -227,18 +258,50 @@
         cart.forEach(i => { subtotal += i.selling_price * i.quantity; tax += (i.selling_price * i.quantity * i.tax_percent / 100); });
         const discAmt = subtotal * discount / 100;
         const total = subtotal - discAmt + tax;
-        const amtPaidInput = parseFloat(document.getElementById('amountPaidInput').value);
-        const amtPaid = isNaN(amtPaidInput) ? total : amtPaidInput;
-        const due = Math.max(0, total - amtPaid);
+
+        // Auto-fill amount paid with total unless user has manually changed it
+        if (!userModifiedAmtPaid) {
+            document.getElementById('amountPaidInput').value = total > 0 ? total.toFixed(2) : '';
+        }
+        const amtPaidRaw = document.getElementById('amountPaidInput').value.trim();
+        const amtPaid = amtPaidRaw === '' ? 0 : (parseFloat(amtPaidRaw) || 0);
+        const pending = Math.max(0, total - amtPaid);
 
         document.getElementById('subtotalVal').textContent = '₹' + subtotal.toFixed(2);
         document.getElementById('discountVal').textContent = '-₹' + discAmt.toFixed(2);
         document.getElementById('taxVal').textContent = '₹' + tax.toFixed(2);
         document.getElementById('totalVal').textContent = '₹' + total.toFixed(2);
-        document.getElementById('dueVal').textContent = '₹' + due.toFixed(2);
+        document.getElementById('billTotalDisplay').value = '₹' + total.toFixed(2);
+        document.getElementById('pendingDisplay').value = '₹' + pending.toFixed(2);
+        document.getElementById('paidNowVal').textContent = '₹' + amtPaid.toFixed(2);
+        document.getElementById('dueVal').textContent = '₹' + pending.toFixed(2);
+
+        // Status badge
+        const badge = document.getElementById('paymentStatusBadge');
+        const pendingRow = document.getElementById('pendingRow');
+        if (pending <= 0) {
+            badge.textContent = '✅ Paid';
+            badge.style.background = 'rgba(34,197,94,0.15)';
+            badge.style.color = '#22c55e';
+            pendingRow.style.display = 'none';
+        } else if (amtPaid > 0) {
+            badge.textContent = '⚠️ Partial';
+            badge.style.background = 'rgba(245,158,11,0.15)';
+            badge.style.color = '#f59e0b';
+            pendingRow.style.display = '';
+        } else {
+            badge.textContent = '🕐 Pending';
+            badge.style.background = 'rgba(239,68,68,0.12)';
+            badge.style.color = '#ef4444';
+            pendingRow.style.display = '';
+        }
     }
 
-    document.getElementById('amountPaidInput').addEventListener('input', calculateTotals);
+
+    document.getElementById('amountPaidInput').addEventListener('input', function () {
+        userModifiedAmtPaid = true;
+        calculateTotals();
+    });
 
     // Customer search
     let customerTimeout;
@@ -284,7 +347,8 @@
         btn.disabled = true; btn.textContent = '⏳ Processing...';
 
         const discount = parseFloat(document.getElementById('discountInput').value) || 0;
-        const amtPaidInput = parseFloat(document.getElementById('amountPaidInput').value);
+        const amtPaidRaw = document.getElementById('amountPaidInput').value.trim();
+        const amtPaidInput = parseFloat(amtPaidRaw);
         let subtotal = 0;
         cart.forEach(i => subtotal += i.selling_price * i.quantity);
         const discAmt = subtotal * discount / 100;
@@ -292,10 +356,17 @@
         let tax = 0;
         cart.forEach(i => tax += i.selling_price * i.quantity * i.tax_percent / 100);
         const total = subtotal - discAmt + tax;
-        const amtPaid = isNaN(amtPaidInput) ? total : amtPaidInput;
+        // null = blank field → backend treats as ₹0 (pending/partial), explicit value is used as-is
+        const amtPaid = amtPaidRaw === '' ? null : (isNaN(amtPaidInput) ? null : amtPaidInput);
+
+        const customerId = document.getElementById('selectedCustomerId').value || null;
+        const customerTyped = document.getElementById('customerSearch').value.trim();
+        // If user typed a name but didn't pick from dropdown, send it for auto-creation
+        const newCustomerName = (!customerId && customerTyped) ? customerTyped : null;
 
         const payload = {
-            customer_id: document.getElementById('selectedCustomerId').value || null,
+            customer_id: customerId,
+            new_customer_name: newCustomerName,
             items: cart.map(i => ({ product_id: i.product_id, name: i.name, quantity: i.quantity, unit_price: i.selling_price })),
             discount_percent: discount,
             payment_method: document.getElementById('paymentMethod').value,

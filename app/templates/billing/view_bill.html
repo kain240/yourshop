@@ -6,7 +6,8 @@
 <button class="btn btn-primary btn-sm" onclick="document.getElementById('sendModal').classList.add('active')">📤
     Send</button>
 {% if bill.amount_due > 0 %}
-<button class="btn btn-success btn-sm" onclick="initRazorpay()">💳 Collect Online</button>
+<button class="btn btn-success btn-sm" onclick="document.getElementById('collectPayModal').classList.add('active')">💵
+    Collect Payment</button>
 {% endif %}
 {% endblock %}
 
@@ -111,6 +112,40 @@
     </div>
 </div>
 
+<!-- Payment History -->
+{% set bill_payments = bill.payments.order_by('created_at').all() %}
+{% if bill_payments %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><span class="card-title">💳 Payment History</span></div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Date</th>
+                    <th>Method</th>
+                    <th>Amount</th>
+                    <th>Notes</th>
+                    <th>By</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in bill_payments %}
+                <tr>
+                    <td class="text-muted">{{ loop.index }}</td>
+                    <td class="text-sm">{{ p.created_at.strftime('%d %b %Y, %I:%M %p') }}</td>
+                    <td><span class="badge badge-info">{{ p.method.upper() }}</span></td>
+                    <td class="font-semibold text-success">₹{{ "{:,.2f}".format(p.amount) }}</td>
+                    <td class="text-sm text-muted">{{ p.note or '—' }}</td>
+                    <td class="text-sm">{{ p.user.name if p.user else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <!-- Returns -->
 {% set returns = bill.returns.all() %}
 {% if returns %}
@@ -174,62 +209,51 @@
 <!-- Collect Payment Modal -->
 <div class="modal-overlay" id="collectPayModal">
     <div class="modal">
-        <div class="modal-header"><span class="modal-title">💵 Record Payment</span><button class="modal-close"
-                onclick="document.getElementById('collectPayModal').classList.remove('active')">✕</button></div>
-        {% if bill.customer %}
-        <form method="POST" action="{{ url_for('customers.record_payment', customer_id=bill.customer_id) }}">
-            {% else %}
-            <form>
-                {% endif %}
-                <div class="modal-body">
-                    <div class="form-group"><label class="form-label">Amount (₹)</label>
-                        <input type="number" name="amount" class="form-control" value="{{ bill.amount_due }}"
-                            step="0.01" required />
-                    </div>
-                    <div class="form-group"><label class="form-label">Method</label>
-                        <select name="method" class="form-control">
-                            <option value="cash">Cash</option>
-                            <option value="upi">UPI</option>
-                            <option value="card">Card</option>
-                        </select>
-                    </div>
+        <div class="modal-header">
+            <span class="modal-title">💵 Record Payment</span>
+            <button class="modal-close"
+                onclick="document.getElementById('collectPayModal').classList.remove('active')">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('billing.record_bill_payment', bill_id=bill.id) }}">
+            <div class="modal-body">
+                <div
+                    style="display:flex; gap:12px; background:var(--bg-hover); border-radius:var(--radius-sm); padding:12px; margin-bottom:16px; font-size:0.875rem;">
+                    <div><span class="text-muted">Bill Total</span><br><strong>₹{{ "{:,.2f}".format(bill.total)
+                            }}</strong></div>
+                    <div><span class="text-muted">Paid So Far</span><br><strong class="text-success">₹{{
+                            "{:,.2f}".format(bill.amount_paid) }}</strong></div>
+                    <div><span class="text-muted">Still Due</span><br><strong class="text-danger">₹{{
+                            "{:,.2f}".format(bill.amount_due) }}</strong></div>
                 </div>
-                <div class="modal-footer"><button class="btn btn-success">Record</button><button type="button"
-                        class="btn btn-secondary"
-                        onclick="document.getElementById('collectPayModal').classList.remove('active')">Cancel</button>
+                <div class="form-group">
+                    <label class="form-label">Amount Received (₹)</label>
+                    <input type="number" name="amount" class="form-control" value="{{ bill.amount_due }}" step="0.01"
+                        min="0.01" max="{{ bill.amount_due }}" required />
+                    <div class="text-xs text-muted mt-1">Enter the amount being paid now. Maximum: ₹{{
+                        "{:,.2f}".format(bill.amount_due) }}</div>
                 </div>
-            </form>
+                <div class="form-group">
+                    <label class="form-label">Payment Method</label>
+                    <select name="method" class="form-control">
+                        <option value="cash">💵 Cash</option>
+                        <option value="upi">📱 UPI</option>
+                        <option value="card">💳 Card</option>
+                        <option value="razorpay">🔷 Razorpay</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Notes (optional)</label>
+                    <input type="text" name="notes" class="form-control" placeholder="e.g. Paid via PhonePe" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success">✅ Record Payment</button>
+                <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('collectPayModal').classList.remove('active')">Cancel</button>
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}
 
-{% block scripts %}
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-<script>
-    async function initRazorpay() {
-        const res = await fetch('/payments/create-order/{{ bill.id }}', { method: 'POST' });
-        if (!res.ok) { showToast('Could not create order. Check Razorpay config.', 'danger'); return; }
-        const data = await res.json();
-        if (data.error) { showToast(data.error, 'danger'); return; }
-        const rzp = new Razorpay({
-            key: data.key,
-            amount: data.amount,
-            currency: data.currency,
-            name: 'YourShop',
-            description: `Bill ${data.bill_no}`,
-            order_id: data.order_id,
-            handler: async function (resp) {
-                const verRes = await fetch('/payments/verify', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...resp, bill_id: {{ bill.id }} })
-    });
-    const vd = await verRes.json();
-    if (vd.success) { showToast('Payment successful!', 'success'); setTimeout(() => location.reload(), 1500); }
-    else showToast('Payment verification failed.', 'danger');
-    },
-    prefill: { name: '{{ bill.customer_name }}', {{ "email: '" + bill.customer.email + "'," if bill.customer and bill.customer.email else '' } } { { "contact: '" + bill.customer.phone + "'" if bill.customer and bill.customer.phone else '' } } }
-  });
-    rzp.open();
-}
-</script>
-{% endblock %}
+{% block scripts %}{% endblock %}

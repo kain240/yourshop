@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% block title %}{{ customer.name }} — YourShop{% endblock %}
+{% block topbar_title %}👤 {{ customer.name }}{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('customers.edit_customer', customer_id=customer.id) }}" class="btn btn-outline btn-sm">Edit</a>
+{% if customer.credit_balance > 0 %}
+<button class="btn btn-success btn-sm" onclick="document.getElementById('payModal').classList.add('active')">💵 Collect
+    Payment</button>
+{% endif %}
+{% endblock %}
+{% block content %}
+<div class="grid-2" style="margin-bottom:20px;">
+    <div class="card">
+        <div class="card-header"><span class="card-title">Profile</span></div>
+        <table style="font-size:0.875rem;">
+            <tr>
+                <td class="text-muted" style="padding:6px 0;width:120px;">Phone</td>
+                <td>{{ customer.phone or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="text-muted" style="padding:6px 0;">Email</td>
+                <td>{{ customer.email or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="text-muted" style="padding:6px 0;">Address</td>
+                <td>{{ customer.address or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="text-muted" style="padding:6px 0;">Credit Limit</td>
+                <td>₹{{ "{:,.2f}".format(customer.credit_limit) }}</td>
+            </tr>
+        </table>
+    </div>
+    <div class="card">
+        <div class="card-header"><span class="card-title">Account</span></div>
+        <div class="stat-card {% if customer.credit_balance > 0 %}danger{% else %}success{% endif %}"
+            style="box-shadow:none;border:none;">
+            <div class="stat-icon">💳</div>
+            <div class="stat-value">₹{{ "{:,.2f}".format(customer.credit_balance) }}</div>
+            <div class="stat-label">{{ 'Outstanding Balance' if customer.credit_balance > 0 else 'No Outstanding Dues'
+                }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="tabs">
+    <button class="tab-btn active" onclick="showTab('bills')">Bills ({{ bills|length }})</button>
+    <button class="tab-btn" onclick="showTab('ledger')">Credit Ledger ({{ ledger|length }})</button>
+</div>
+
+<div id="tabBills">
+    {% if bills %}
+    <div class="card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Bill No</th>
+                        <th>Date</th>
+                        <th>Total</th>
+                        <th>Paid</th>
+                        <th>Due</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>{% for b in bills %}
+                    <tr>
+                        <td class="font-semibold text-primary">{{ b.bill_no }}</td>
+                        <td class="text-sm text-muted">{{ b.bill_date.strftime('%d %b %Y') }}</td>
+                        <td>₹{{ "{:,.2f}".format(b.total) }}</td>
+                        <td class="text-success">₹{{ "{:,.2f}".format(b.amount_paid) }}</td>
+                        <td class="text-danger">₹{{ "{:,.2f}".format(b.amount_due) }}</td>
+                        <td><span
+                                class="badge badge-{{ 'success' if b.status=='paid' else 'warning' if b.status=='partial' else 'danger' }}">{{
+                                b.status }}</span></td>
+                        <td><a href="{{ url_for('billing.view_bill', bill_id=b.id) }}"
+                                class="btn btn-sm btn-outline">View</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}<div class="empty-state">
+        <div class="empty-icon">🧾</div>
+        <p>No bills yet</p>
+    </div>{% endif %}
+</div>
+
+<div id="tabLedger" style="display:none;">
+    {% if ledger %}
+    <div class="card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Balance After</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>{% for l in ledger %}
+                    <tr>
+                        <td class="text-sm text-muted">{{ l.created_at.strftime('%d %b %Y') }}</td>
+                        <td><span class="badge {{ 'badge-danger' if l.entry_type=='debit' else 'badge-success' }}">{{
+                                l.entry_type }}</span></td>
+                        <td class="{{ 'text-danger' if l.entry_type=='debit' else 'text-success' }}">₹{{
+                            "{:,.2f}".format(l.amount) }}</td>
+                        <td>₹{{ "{:,.2f}".format(l.balance_after) }}</td>
+                        <td class="text-sm text-muted">{{ l.description or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}<div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <p>No ledger entries</p>
+    </div>{% endif %}
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal-overlay" id="payModal">
+    <div class="modal">
+        <div class="modal-header"><span class="modal-title">💵 Collect Payment from {{ customer.name }}</span><button
+                class="modal-close" onclick="document.getElementById('payModal').classList.remove('active')">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('customers.record_payment', customer_id=customer.id) }}">
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">Amount (₹)</label>
+                    <input type="number" name="amount" class="form-control" step="0.01"
+                        value="{{ customer.credit_balance }}" required />
+                </div>
+                <div class="form-group"><label class="form-label">Method</label>
+                    <select name="method" class="form-control">
+                        <option value="cash">Cash</option>
+                        <option value="upi">UPI</option>
+                        <option value="card">Card</option>
+                    </select>
+                </div>
+                <div class="form-group"><label class="form-label">Note</label>
+                    <input type="text" name="note" class="form-control" placeholder="Optional" />
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-success">Record</button><button type="button"
+                    class="btn btn-secondary"
+                    onclick="document.getElementById('payModal').classList.remove('active')">Cancel</button></div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function showTab(tab) {
+        document.getElementById('tabBills').style.display = tab === 'bills' ? '' : 'none';
+        document.getElementById('tabLedger').style.display = tab === 'ledger' ? '' : 'none';
+        document.querySelectorAll('.tab-btn').forEach((btn, i) => btn.classList.toggle('active', (i === 0 && tab === 'bills') || (i === 1 && tab === 'ledger')));
+    }
+</script>
+{% endblock %}

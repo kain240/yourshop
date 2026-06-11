@@ -92,6 +92,19 @@ def create_bill(data, branch_id, user_id):
 
     # Create bill
     customer_id = data.get('customer_id') or None
+
+    # Auto-create customer if a new name was typed but not selected from dropdown
+    if not customer_id:
+        new_customer_name = (data.get('new_customer_name') or '').strip()
+        if new_customer_name:
+            new_customer = Customer(
+                name=new_customer_name,
+                branch_id=branch_id
+            )
+            db.session.add(new_customer)
+            db.session.flush()  # get the ID before commit
+            customer_id = new_customer.id
+
     subtotal = Decimal('0')
     tax_total = Decimal('0')
 
@@ -122,7 +135,11 @@ def create_bill(data, branch_id, user_id):
         batches_used = []
         available_batches = Batch.query.filter_by(
             product_id=product.id, is_active=True
-        ).filter(Batch.quantity > 0).order_by(Batch.expiry_date.nullslast(), Batch.created_at).all()
+        ).filter(Batch.quantity > 0).order_by(
+            db.func.isnull(Batch.expiry_date),  # NULLs last (MySQL compatible)
+            Batch.expiry_date,
+            Batch.created_at
+        ).all()
 
         for batch in available_batches:
             if remaining <= 0:
@@ -164,7 +181,11 @@ def create_bill(data, branch_id, user_id):
 
     # Payment
     payment_method = data.get('payment_method', 'cash')
-    amount_paid = Decimal(str(data.get('amount_paid', total)))
+    raw_paid = data.get('amount_paid')  # None = blank field (user left it empty)
+    if raw_paid is None:
+        amount_paid = Decimal('0')
+    else:
+        amount_paid = Decimal(str(raw_paid))
     amount_due = total - amount_paid
 
     if amount_due > 0:
@@ -226,6 +247,75 @@ def create_bill(data, branch_id, user_id):
             current_app.logger.error(f'WhatsApp send failed: {e}')
 
     return {'success': True, 'bill_id': bill.id, 'bill_no': bill.bill_no}
+
+
+@billing_bp.route('/<int:bill_id>/record-payment', methods=['POST'])
+@login_required
+def record_bill_payment(bill_id):
+    """Record an additional payment against an existing partial/credit bill."""
+    bill = Bill.query.get_or_404(bill_id)
+
+    if bill.amount_due <= 0:
+        flash('This bill is already fully paid.', 'info')
+        return redirect(url_for('billing.view_bill', bill_id=bill_id))
+
+    amount = request.form.get('amount', type=float)
+    method = request.form.get('method', 'cash')
+    notes = request.form.get('notes', '').strip()
+
+    if not amount or amount <= 0:
+        flash('Please enter a valid payment amount.', 'danger')
+        return redirect(url_for('billing.view_bill', bill_id=bill_id))
+
+    from decimal import Decimal
+    amount_dec = Decimal(str(amount))
+
+    # Cap payment at amount due
+    if amount_dec > bill.amount_due:
+        amount_dec = bill.amount_due
+
+    # Update bill
+    bill.amount_paid += amount_dec
+    bill.amount_due -= amount_dec
+    if bill.amount_due <= 0:
+        bill.amount_due = Decimal('0')
+        bill.status = 'paid'
+    else:
+        bill.status = 'partial'
+
+    # Create Payment record
+    payment = Payment(
+        bill_id=bill.id,
+        customer_id=bill.customer_id,
+        amount=amount_dec,
+        method=method,
+        note=notes,
+        user_id=current_user.id
+    )
+    db.session.add(payment)
+
+    # If customer had credit on this bill, reduce their credit balance
+    if bill.customer_id:
+        customer = Customer.query.get(bill.customer_id)
+        if customer and customer.credit_balance > 0:
+            reduce = min(customer.credit_balance, amount_dec)
+            customer.credit_balance -= reduce
+            ledger = CreditLedger(
+                customer_id=bill.customer_id,
+                amount=reduce,
+                entry_type='credit',
+                description=f'Payment received for {bill.bill_no}' + (f' — {notes}' if notes else ''),
+                balance_after=customer.credit_balance,
+                reference_id=bill.id,
+                reference_type='bill'
+            )
+            db.session.add(ledger)
+
+    db.session.commit()
+
+    status_label = 'fully paid ✅' if bill.status == 'paid' else 'partially paid ⚠️'
+    flash(f'Payment of ₹{amount_dec:,.2f} recorded. Bill is now {status_label}', 'success')
+    return redirect(url_for('billing.view_bill', bill_id=bill_id))
 
 
 @billing_bp.route('/<int:bill_id>')

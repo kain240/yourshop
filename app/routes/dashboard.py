@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, session
 from flask_login import login_required, current_user
 from app import db
-from app.models.billing import Bill, Customer
+from app.models.billing import Bill, BillItem, Customer
 from app.models.inventory import Product, Batch
 from app.models.supplier import Supplier
 from app.models.payment import Payment
@@ -80,12 +80,11 @@ def index():
 
     # Monthly P&L quick
     monthly_cogs = db.session.query(
-        func.sum(db.cast(Bill.query.with_entities(func.sum(
-            db.cast(db.text('bill_items.cost_price * bill_items.quantity'), db.Numeric)
-        )).filter(
-            Bill.branch_id == branch_id,
-            Bill.bill_date >= month_start
-        ).scalar() or 0, db.Numeric))
+        func.sum(BillItem.cost_price * BillItem.quantity)
+    ).join(Bill, BillItem.bill_id == Bill.id).filter(
+        Bill.branch_id == branch_id,
+        Bill.bill_date >= month_start,
+        Bill.status != 'cancelled'
     ).scalar() or 0
 
     monthly_expenses = db.session.query(func.sum(Expense.amount)).filter(

@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Return/Exchange — Bill {{ bill.bill_no }}{% endblock %}
+{% block topbar_title %}↩ Return / Exchange{% endblock %}
+{% block content %}
+<div class="card" style="max-width:700px;">
+    <div class="mb-4"><span class="text-muted text-sm">Bill: </span><span class="font-semibold">{{ bill.bill_no
+            }}</span> | <span class="text-muted text-sm">Customer: </span><span>{{ bill.customer_name }}</span></div>
+    <form method="POST">
+        <div class="form-group"><label class="form-label">Select Product *</label>
+            <select name="product_id" class="form-control" required>
+                <option value="">-- Select item from bill --</option>
+                {% for item in bill.items %}
+                <option value="{{ item.product_id }}">{{ item.product_name }} (Qty: {{ item.quantity }}, ₹{{
+                    item.unit_price }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label class="form-label">Quantity to Return *</label>
+                <input type="number" name="quantity" class="form-control" min="1" required />
+            </div>
+            <div class="form-group"><label class="form-label">Type</label>
+                <select name="return_type" class="form-control">
+                    <option value="return">Return (Refund)</option>
+                    <option value="exchange">Exchange</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group"><label class="form-label">Reason</label>
+            <input type="text" name="reason" class="form-control" placeholder="e.g. Damaged, expired, wrong item..." />
+        </div>
+        <div class="form-group"><label class="form-label">Refund Method</label>
+            <select name="refund_method" class="form-control">
+                <option value="cash">Cash</option>
+                <option value="credit">Credit (add to customer balance)</option>
+                <option value="razorpay">Razorpay Refund</option>
+            </select>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:8px;">
+            <button type="submit" class="btn btn-warning btn-lg">↩ Process Return</button>
+            <a href="{{ url_for('billing.view_bill', bill_id=bill.id) }}" class="btn btn-secondary btn-lg">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
