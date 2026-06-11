@@ -6,7 +6,7 @@ from app.models.inventory import Product, Batch
 from app.models.supplier import Supplier
 from app.models.payment import Payment
 from app.models.report import Expense
-from sqlalchemy import func
+from sqlalchemy import func, cast, Date
 from datetime import datetime, date, timedelta
 
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -27,7 +27,7 @@ def index():
     # Today's sales
     today_bills = Bill.query.filter(
         Bill.branch_id == branch_id,
-        func.date(Bill.bill_date) == today,
+        cast(Bill.bill_date, Date) == today,
         Bill.status != 'cancelled'
     ).all()
     today_revenue = sum(float(b.total) for b in today_bills)
@@ -73,7 +73,7 @@ def index():
         day = today - timedelta(days=i)
         day_total = db.session.query(func.sum(Bill.total)).filter(
             Bill.branch_id == branch_id,
-            func.date(Bill.bill_date) == day,
+            cast(Bill.bill_date, Date) == day,
             Bill.status != 'cancelled'
         ).scalar() or 0
         sales_chart.append({'date': day.strftime('%d %b'), 'amount': float(day_total)})

@@ -6,7 +6,7 @@ from app.models.inventory import Product, Batch, InventoryLog
 from app.models.payment import Payment, CreditLedger
 from app.services.pdf_service import generate_bill_pdf
 from app.services.notification_service import send_bill_email, send_bill_whatsapp
-from sqlalchemy import or_
+from sqlalchemy import or_, nullslast
 from decimal import Decimal
 from datetime import datetime, date
 import json
@@ -136,8 +136,7 @@ def create_bill(data, branch_id, user_id):
         available_batches = Batch.query.filter_by(
             product_id=product.id, is_active=True
         ).filter(Batch.quantity > 0).order_by(
-            db.func.isnull(Batch.expiry_date),  # NULLs last (MySQL compatible)
-            Batch.expiry_date,
+            nullslast(Batch.expiry_date),  # NULLs last — works on SQLite, MySQL, PostgreSQL
             Batch.created_at
         ).all()
 

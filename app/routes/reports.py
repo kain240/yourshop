@@ -4,7 +4,7 @@ from app import db
 from app.models.billing import Bill, BillItem
 from app.models.report import Expense
 from app.models.inventory import Product
-from sqlalchemy import func
+from sqlalchemy import func, cast, Date
 from decimal import Decimal
 from datetime import datetime, date, timedelta
 
@@ -34,8 +34,8 @@ def index():
     # Revenue from bills
     revenue = db.session.query(func.sum(Bill.total)).filter(
         Bill.branch_id == branch_id,
-        func.date(Bill.bill_date) >= d_from,
-        func.date(Bill.bill_date) <= d_to,
+        cast(Bill.bill_date, Date) >= d_from,
+        cast(Bill.bill_date, Date) <= d_to,
         Bill.status != 'cancelled'
     ).scalar() or Decimal('0')
 
@@ -44,8 +44,8 @@ def index():
         func.sum(BillItem.cost_price * BillItem.quantity)
     ).join(Bill).filter(
         Bill.branch_id == branch_id,
-        func.date(Bill.bill_date) >= d_from,
-        func.date(Bill.bill_date) <= d_to,
+        cast(Bill.bill_date, Date) >= d_from,
+        cast(Bill.bill_date, Date) <= d_to,
         Bill.status != 'cancelled'
     ).scalar() or Decimal('0')
 
@@ -68,12 +68,12 @@ def index():
     while current_day <= d_to and len(daily_data) < 60:
         day_revenue = db.session.query(func.sum(Bill.total)).filter(
             Bill.branch_id == branch_id,
-            func.date(Bill.bill_date) == current_day,
+            cast(Bill.bill_date, Date) == current_day,
             Bill.status != 'cancelled'
         ).scalar() or 0
         day_cogs = db.session.query(func.sum(BillItem.cost_price * BillItem.quantity)).join(Bill).filter(
             Bill.branch_id == branch_id,
-            func.date(Bill.bill_date) == current_day,
+            cast(Bill.bill_date, Date) == current_day,
             Bill.status != 'cancelled'
         ).scalar() or 0
         daily_data.append({
@@ -91,8 +91,8 @@ def index():
         func.sum(BillItem.total_price).label('total_revenue')
     ).join(BillItem, Product.id == BillItem.product_id).join(Bill).filter(
         Bill.branch_id == branch_id,
-        func.date(Bill.bill_date) >= d_from,
-        func.date(Bill.bill_date) <= d_to,
+        cast(Bill.bill_date, Date) >= d_from,
+        cast(Bill.bill_date, Date) <= d_to,
         Bill.status != 'cancelled'
     ).group_by(Product.id, Product.name).order_by(func.sum(BillItem.quantity).desc()).limit(10).all()
 
@@ -107,8 +107,8 @@ def index():
      .outerjoin(Category, Product.category_id == Category.id)\
      .filter(
         Bill.branch_id == branch_id,
-        func.date(Bill.bill_date) >= d_from,
-        func.date(Bill.bill_date) <= d_to,
+        cast(Bill.bill_date, Date) >= d_from,
+        cast(Bill.bill_date, Date) <= d_to,
         Bill.status != 'cancelled'
      ).group_by(Category.name).all()
 
