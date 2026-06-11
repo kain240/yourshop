@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Account — YourShop</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <style>
+        .auth-footer {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+        .auth-footer a {
+            color: var(--primary-light);
+            font-weight: 500;
+        }
+        .auth-footer a:hover { color: var(--primary); }
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+        .password-strength {
+            margin-top: 6px;
+            height: 3px;
+            border-radius: 2px;
+            background: var(--border);
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+        .password-strength-fill {
+            height: 100%;
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.3s, background 0.3s;
+        }
+        .strength-text {
+            font-size: 0.72rem;
+            margin-top: 4px;
+            color: var(--text-dim);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-page">
+        <div class="login-card" style="max-width: 460px;">
+            <div class="login-logo">
+                <div class="logo-icon-lg">🛒</div>
+                <h1>YourShop</h1>
+                <p>Create your account to get started</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('auth.register') }}" id="registerForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Full Name</label>
+                        <input type="text" name="name" class="form-control" placeholder="Your name"
+                            value="{{ form_data.name if form_data else '' }}" required autofocus />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Shop / Branch Name</label>
+                        <input type="text" name="branch_name" class="form-control" placeholder="e.g. Main Store"
+                            value="{{ form_data.branch_name if form_data else '' }}" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" name="email" class="form-control" placeholder="you@example.com"
+                        value="{{ form_data.email if form_data else '' }}" required />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" name="password" class="form-control" id="password"
+                        placeholder="Min. 6 characters" required oninput="checkStrength(this.value)" />
+                    <div class="password-strength">
+                        <div class="password-strength-fill" id="strengthBar"></div>
+                    </div>
+                    <div class="strength-text" id="strengthText"></div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Confirm Password</label>
+                    <input type="password" name="confirm_password" class="form-control"
+                        placeholder="Re-enter your password" required />
+                </div>
+
+                <button type="submit" class="btn btn-primary w-full btn-lg" style="justify-content: center; margin-top: 8px;">
+                    Create Account →
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                Already have an account?
+                <a href="{{ url_for('auth.login') }}">Sign in</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function checkStrength(val) {
+            const bar = document.getElementById('strengthBar');
+            const text = document.getElementById('strengthText');
+            let score = 0;
+            if (val.length >= 6) score++;
+            if (val.length >= 10) score++;
+            if (/[A-Z]/.test(val)) score++;
+            if (/[0-9]/.test(val)) score++;
+            if (/[^A-Za-z0-9]/.test(val)) score++;
+
+            const levels = [
+                { w: '0%', color: 'var(--border)', label: '' },
+                { w: '25%', color: 'var(--danger)', label: '😟 Too weak' },
+                { w: '50%', color: 'var(--warning)', label: '🤔 Fair' },
+                { w: '75%', color: 'var(--info)', label: '👍 Good' },
+                { w: '90%', color: 'var(--success)', label: '💪 Strong' },
+                { w: '100%', color: 'var(--success)', label: '🔒 Very strong' },
+            ];
+            const l = levels[Math.min(score, 5)];
+            bar.style.width = l.w;
+            bar.style.background = l.color;
+            text.textContent = l.label;
+            text.style.color = l.color;
+        }
+
+        // Confirm password validation
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            const p1 = document.querySelector('[name="password"]').value;
+            const p2 = document.querySelector('[name="confirm_password"]').value;
+            if (p1 !== p2) {
+                e.preventDefault();
+                alert('Passwords do not match!');
+            }
+        });
+    </script>
+</body>
+</html>

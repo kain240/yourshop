@@ -47,37 +47,61 @@ def login():
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
+    # If already registered users exist and someone accesses /register,
+    # still allow it so new staff can be added via self-registration.
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard.index'))
+
     if request.method == 'POST':
-        name = request.form.get('name')
-        email = request.form.get('email').strip().lower()
-        password = request.form.get('password')
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        branch_name = request.form.get('branch_name', '').strip() or 'Main Branch'
+
+        # Validation
+        if not name or not email or not password:
+            flash('All fields are required.', 'danger')
+            return render_template('auth/register.html', form_data=request.form)
+
+        if password != confirm_password:
+            flash('Passwords do not match.', 'danger')
+            return render_template('auth/register.html', form_data=request.form)
+
+        if len(password) < 6:
+            flash('Password must be at least 6 characters.', 'danger')
+            return render_template('auth/register.html', form_data=request.form)
 
         if User.query.filter_by(email=email).first():
-            flash('Email already exists.', 'danger')
-            return redirect(url_for('auth.register'))
+            flash('An account with this email already exists.', 'danger')
+            return render_template('auth/register.html', form_data=request.form)
 
-        # Create a default branch if none exists
+        # Create default branch if none exists, or use the provided name
         branch = Branch.query.first()
         if not branch:
-            branch = Branch(name='Main Branch', is_active=True)
+            branch = Branch(name=branch_name, address='', is_active=True)
             db.session.add(branch)
-            db.session.commit()
+            db.session.flush()
 
-        user = User(name=name, email=email, role='admin', branch_id=branch.id, is_active=True)
+        # First registered user is admin, subsequent ones are staff
+        is_first_user = User.query.count() == 0
+        role = 'admin' if is_first_user else 'staff'
+
+        user = User(
+            name=name,
+            email=email,
+            role=role,
+            branch_id=branch.id,
+            is_active=True
+        )
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
-        flash('Account created! Please log in.', 'success')
+
+        flash(f'Account created successfully! You can now log in.', 'success')
         return redirect(url_for('auth.login'))
 
-    return '''
-        <form method="POST">
-            <input name="name" placeholder="Name" required><br>
-            <input name="email" placeholder="Email" required><br>
-            <input name="password" type="password" placeholder="Password" required><br>
-            <button type="submit">Register</button>
-        </form>
-    '''
+    return render_template('auth/register.html', form_data=None)
 
 
 @auth_bp.route('/logout')

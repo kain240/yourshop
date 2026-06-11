@@ -6,6 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login — YourShop</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <style>
+        .auth-footer {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+        .auth-footer a {
+            color: var(--primary-light);
+            font-weight: 500;
+        }
+        .auth-footer a:hover { color: var(--primary); }
+    </style>
 </head>
 
 <body>
@@ -55,8 +68,13 @@
                     Sign In →
                 </button>
             </form>
+
+            <div class="auth-footer">
+                Don't have an account?
+                <a href="{{ url_for('auth.register') }}">Create one</a>
+            </div>
         </div>
     </div>
 </body>
 
-</html>
+</html>
